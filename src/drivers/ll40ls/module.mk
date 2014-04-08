@@ -35,6 +35,6 @@
 # Makefile to build the PulsedLight Lidar-Lite driver.
 #
 
-MODULE_COMMAND	= pllidarlite
+MODULE_COMMAND	= ll40ls
 
-SRCS		= pllidarlite.cpp
+SRCS		= ll40ls.cpp

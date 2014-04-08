@@ -32,7 +32,7 @@
  ****************************************************************************/
 
 /**
- * @file pllidarlite.cpp
+ * @file ll40ls.cpp
  * @author Allyson Kreft
  *
  * Driver for the PulsedLight Lidar-Lite range finders connected via I2C.
@@ -72,21 +72,20 @@
 #include <board_config.h>
 
 /* Configuration Constants */
-#define PLLIDARLITE_BUS 			    PX4_I2C_BUS_EXPANSION
-#define PLLIDARLITE_BASEADDR 	0x42 /* 7-bit address. */
+#define LL40LS_BUS 			   PX4_I2C_BUS_EXPANSION
+#define LL40LS_BASEADDR 	   0x42 // 7-bit address
 
-/* PLLIDARLITE Registers addresses */
-
-#define PLLIDARLITE_TAKE_RANGE_REG	    0x00 // Measure range Register
-#define PLLIDARLITE_TAKE_RANGE_ACQUIRE  0x61
-#define PLLIDARLITE_DISTHIGH_REG        0x0f // high byte of distance measurement
-#define PLLIDARLITE_DISTLOW_REG         0x10 // low byte of distance measurement
+/* LL40LS Registers addresses */
+#define LL40LS_MEASURE_REG	   0x00 // Measure Range Register
+#define LL40LS_MSRREG_ACQUIRE  0x61
+#define LL40LS_DISTHIGH_REG    0x0f // high byte of distance measurement
+#define LL40LS_DISTLOW_REG     0x10 // low byte of distance measurement
 
 /* Device limits */
-#define PLLIDARLITE_MIN_DISTANCE (0.00f)
-#define PLLIDARLITE_MAX_DISTANCE (1400.00f)
+#define LL40LS_MIN_DISTANCE (0.00f)
+#define LL40LS_MAX_DISTANCE (14.00f)
 
-#define PLLIDARLITE_CONVERSION_INTERVAL 60000 /* 60ms */
+#define LL40LS_CONVERSION_INTERVAL 60000 /* 60ms */
 
 /* oddly, ERROR is not defined for c++ */
 #ifdef ERROR
@@ -98,11 +97,11 @@ static const int ERROR = -1;
 # error This requires CONFIG_SCHED_WORKQUEUE.
 #endif
 
-class PLLIDARLITE : public device::I2C
+class LL40LS : public device::I2C
 {
 public:
-	PLLIDARLITE(int bus = PLLIDARLITE_BUS, int address = PLLIDARLITE_BASEADDR);
-	virtual ~PLLIDARLITE();
+	LL40LS(int bus = LL40LS_BUS, int address = LL40LS_BASEADDR);
+	virtual ~LL40LS();
 
 	virtual int 		init();
 
@@ -156,8 +155,8 @@ private:
 
 	/**
 	* Set the min and max distance thresholds if you want the end points of the sensors
-	* range to be brought in at all, otherwise it will use the defaults PLLIDARLITE_MIN_DISTANCE
-	* and PLLIDARLITE_MAX_DISTANCE
+	* range to be brought in at all, otherwise it will use the defaults LL40LS_MIN_DISTANCE
+	* and LL40LS_MAX_DISTANCE
 	*/
 	void				set_minimum_distance(float min);
 	void				set_maximum_distance(float max);
@@ -185,21 +184,22 @@ private:
 /*
  * Driver 'main' command.
  */
-extern "C" __EXPORT int pllidarlite_main(int argc, char *argv[]);
+extern "C" __EXPORT int ll40ls_main(int argc, char *argv[]);
 
-PLLIDARLITE::PLLIDARLITE(int bus, int address) :
-	I2C("PLLIDARLITE", RANGE_FINDER_DEVICE_PATH, bus, address, 100000),
-	_min_distance(PLLIDARLITE_MIN_DISTANCE),
-	_max_distance(PLLIDARLITE_MAX_DISTANCE),
+LL40LS::LL40LS(int bus, int address) :
+	I2C("LL40LS", RANGE_FINDER_DEVICE_PATH, bus, address, 100000),
+	_min_distance(LL40LS_MIN_DISTANCE),
+	_max_distance(LL40LS_MAX_DISTANCE),
 	_reports(nullptr),
 	_sensor_ok(false),
 	_measure_ticks(0),
 	_collect_phase(false),
 	_range_finder_topic(-1),
-	_sample_perf(perf_alloc(PC_ELAPSED, "pllidarlite_read")),
-	_comms_errors(perf_alloc(PC_COUNT, "pllidarlite_comms_errors")),
-	_buffer_overflows(perf_alloc(PC_COUNT, "pllidarlite_buffer_overflows"))
+	_sample_perf(perf_alloc(PC_ELAPSED, "ll40ls_read")),
+	_comms_errors(perf_alloc(PC_COUNT, "ll40ls_comms_errors")),
+	_buffer_overflows(perf_alloc(PC_COUNT, "ll40ls_buffer_overflows"))
 {
+    // up the retries since the device misses the first measure attempts
     I2C::_retries = 3;
 
 	// enable debug() calls
@@ -209,7 +209,7 @@ PLLIDARLITE::PLLIDARLITE(int bus, int address) :
 	memset(&_work, 0, sizeof(_work));
 }
 
-PLLIDARLITE::~PLLIDARLITE()
+LL40LS::~LL40LS()
 {
 	/* make sure we are truly inactive */
 	stop();
@@ -221,7 +221,7 @@ PLLIDARLITE::~PLLIDARLITE()
 }
 
 int
-PLLIDARLITE::init()
+LL40LS::init()
 {
 	int ret = ERROR;
 
@@ -254,37 +254,37 @@ out:
 }
 
 int
-PLLIDARLITE::probe()
+LL40LS::probe()
 {
 	return measure();
 }
 
 void
-PLLIDARLITE::set_minimum_distance(float min)
+LL40LS::set_minimum_distance(float min)
 {
 	_min_distance = min;
 }
 
 void
-PLLIDARLITE::set_maximum_distance(float max)
+LL40LS::set_maximum_distance(float max)
 {
 	_max_distance = max;
 }
 
 float
-PLLIDARLITE::get_minimum_distance()
+LL40LS::get_minimum_distance()
 {
 	return _min_distance;
 }
 
 float
-PLLIDARLITE::get_maximum_distance()
+LL40LS::get_maximum_distance()
 {
 	return _max_distance;
 }
 
 int
-PLLIDARLITE::ioctl(struct file *filp, int cmd, unsigned long arg)
+LL40LS::ioctl(struct file *filp, int cmd, unsigned long arg)
 {
 	switch (cmd) {
 
@@ -311,7 +311,7 @@ PLLIDARLITE::ioctl(struct file *filp, int cmd, unsigned long arg)
 					bool want_start = (_measure_ticks == 0);
 
 					/* set interval for next measurement to minimum legal value */
-					_measure_ticks = USEC2TICK(PLLIDARLITE_CONVERSION_INTERVAL);
+					_measure_ticks = USEC2TICK(LL40LS_CONVERSION_INTERVAL);
 
 					/* if we need to start the poll state machine, do it */
 					if (want_start) {
@@ -330,7 +330,7 @@ PLLIDARLITE::ioctl(struct file *filp, int cmd, unsigned long arg)
 					unsigned ticks = USEC2TICK(1000000 / arg);
 
 					/* check against maximum rate */
-					if (ticks < USEC2TICK(PLLIDARLITE_CONVERSION_INTERVAL)) {
+					if (ticks < USEC2TICK(LL40LS_CONVERSION_INTERVAL)) {
 						return -EINVAL;
 					}
 
@@ -398,7 +398,7 @@ PLLIDARLITE::ioctl(struct file *filp, int cmd, unsigned long arg)
 }
 
 ssize_t
-PLLIDARLITE::read(struct file *filp, char *buffer, size_t buflen)
+LL40LS::read(struct file *filp, char *buffer, size_t buflen)
 {
 	unsigned count = buflen / sizeof(struct range_finder_report);
 	struct range_finder_report *rbuf = reinterpret_cast<struct range_finder_report *>(buffer);
@@ -439,7 +439,7 @@ PLLIDARLITE::read(struct file *filp, char *buffer, size_t buflen)
 		}
 
 		/* wait for it to complete */
-		usleep(PLLIDARLITE_CONVERSION_INTERVAL);
+		usleep(LL40LS_CONVERSION_INTERVAL);
 
 		/* run the collection phase */
 		if (OK != collect()) {
@@ -458,14 +458,14 @@ PLLIDARLITE::read(struct file *filp, char *buffer, size_t buflen)
 }
 
 int
-PLLIDARLITE::measure()
+LL40LS::measure()
 {
 	int ret;
 
 	/*
 	 * Send the command to begin a measurement.
 	 */
-   	const uint8_t cmd[2] = { PLLIDARLITE_TAKE_RANGE_REG, PLLIDARLITE_TAKE_RANGE_ACQUIRE};
+   	const uint8_t cmd[2] = { LL40LS_MEASURE_REG, LL40LS_MSRREG_ACQUIRE };
 	ret = transfer(cmd, sizeof(cmd), nullptr, 0);
 
 	if (OK != ret) {
@@ -480,7 +480,7 @@ PLLIDARLITE::measure()
 }
 
 int
-PLLIDARLITE::collect()
+LL40LS::collect()
 {
 	int	ret = -EIO;
     int	retLow = -EIO;
@@ -490,22 +490,23 @@ PLLIDARLITE::collect()
 
 	perf_begin(_sample_perf);
 
-    // Read the distance registers
-    uint8_t cmd = PLLIDARLITE_DISTHIGH_REG;
-	ret = transfer(&cmd, 1, &val[0], 1);
-
-    uint8_t cmdLow = PLLIDARLITE_DISTLOW_REG;
-	retLow = transfer(&cmdLow, 1, &val[1], 1);
+    // Read the high byte distance register
+    uint8_t regHigh = LL40LS_DISTHIGH_REG;
+	ret = transfer(&regHigh, 1, &val[0], 1);
     
 	if (ret < 0) {
-		log("error reading from sensor: %d", ret);
+		log("error reading high byte from sensor: %d", ret);
 		perf_count(_comms_errors);
 		perf_end(_sample_perf);
 		return ret;
 	}
     else {
-    	if (retLow < 0) {
-		    log("error reading low value from sensor: %d", retLow);
+        // Read the low byte distance register
+        uint8_t regLow = LL40LS_DISTLOW_REG;
+	    retLow = transfer(&regLow, 1, &val[1], 1);
+
+   	    if (retLow < 0) {
+		    log("error reading low byte from sensor: %d", retLow);
 		    perf_count(_comms_errors);
 		    perf_end(_sample_perf);
 		    return retLow;
@@ -539,14 +540,14 @@ PLLIDARLITE::collect()
 }
 
 void
-PLLIDARLITE::start()
+LL40LS::start()
 {
 	/* reset the report ring and state machine */
 	_collect_phase = false;
 	_reports->flush();
 
 	/* schedule a cycle to start things */
-	work_queue(HPWORK, &_work, (worker_t)&PLLIDARLITE::cycle_trampoline, this, 1);
+	work_queue(HPWORK, &_work, (worker_t)&LL40LS::cycle_trampoline, this, 1);
 
 	/* notify about state change */
 	struct subsystem_info_s info = {
@@ -566,21 +567,21 @@ PLLIDARLITE::start()
 }
 
 void
-PLLIDARLITE::stop()
+LL40LS::stop()
 {
 	work_cancel(HPWORK, &_work);
 }
 
 void
-PLLIDARLITE::cycle_trampoline(void *arg)
+LL40LS::cycle_trampoline(void *arg)
 {
-	PLLIDARLITE *dev = (PLLIDARLITE *)arg;
+	LL40LS *dev = (LL40LS *)arg;
 
 	dev->cycle();
 }
 
 void
-PLLIDARLITE::cycle()
+LL40LS::cycle()
 {
 	/* collection phase? */
 	if (_collect_phase) {
@@ -599,14 +600,14 @@ PLLIDARLITE::cycle()
 		/*
 		 * Is there a collect->measure gap?
 		 */
-		if (_measure_ticks > USEC2TICK(PLLIDARLITE_CONVERSION_INTERVAL)) {
+		if (_measure_ticks > USEC2TICK(LL40LS_CONVERSION_INTERVAL)) {
 
 			/* schedule a fresh cycle call when we are ready to measure again */
 			work_queue(HPWORK,
 				   &_work,
-				   (worker_t)&PLLIDARLITE::cycle_trampoline,
+				   (worker_t)&LL40LS::cycle_trampoline,
 				   this,
-				   _measure_ticks - USEC2TICK(PLLIDARLITE_CONVERSION_INTERVAL));
+				   _measure_ticks - USEC2TICK(LL40LS_CONVERSION_INTERVAL));
 
 			return;
 		}
@@ -623,13 +624,13 @@ PLLIDARLITE::cycle()
 	/* schedule a fresh cycle call when the measurement is done */
 	work_queue(HPWORK,
 		   &_work,
-		   (worker_t)&PLLIDARLITE::cycle_trampoline,
+		   (worker_t)&LL40LS::cycle_trampoline,
 		   this,
-		   USEC2TICK(PLLIDARLITE_CONVERSION_INTERVAL));
+		   USEC2TICK(LL40LS_CONVERSION_INTERVAL));
 }
 
 void
-PLLIDARLITE::print_info()
+LL40LS::print_info()
 {
 	perf_print_counter(_sample_perf);
 	perf_print_counter(_comms_errors);
@@ -641,7 +642,7 @@ PLLIDARLITE::print_info()
 /**
  * Local functions in support of the shell command.
  */
-namespace pllidarlite
+namespace ll40ls
 {
 
 /* oddly, ERROR is not defined for c++ */
@@ -650,7 +651,7 @@ namespace pllidarlite
 #endif
 const int ERROR = -1;
 
-PLLIDARLITE	*g_dev;
+LL40LS	*g_dev;
 
 void	start();
 void	stop();
@@ -671,7 +672,7 @@ start()
 	}
 
 	/* create the driver */
-	g_dev = new PLLIDARLITE(PLLIDARLITE_BUS);
+	g_dev = new LL40LS(LL40LS_BUS);
 
 	if (g_dev == nullptr) {
 		goto fail;
@@ -735,7 +736,7 @@ test()
 	int fd = open(RANGE_FINDER_DEVICE_PATH, O_RDONLY);
 
 	if (fd < 0) {
-		err(1, "%s open failed (try 'pllidarlite start' if the driver is not running", RANGE_FINDER_DEVICE_PATH);
+		err(1, "%s open failed (try 'll40ls start' if the driver is not running", RANGE_FINDER_DEVICE_PATH);
 	}
 
 	/* do a simple demand read */
@@ -829,41 +830,41 @@ info()
 } // namespace
 
 int
-pllidarlite_main(int argc, char *argv[])
+ll40ls_main(int argc, char *argv[])
 {
 	/*
 	 * Start/load the driver.
 	 */
 	if (!strcmp(argv[1], "start")) {
-		pllidarlite::start();
+		ll40ls::start();
 	}
 
 	/*
 	 * Stop the driver
 	 */
 	if (!strcmp(argv[1], "stop")) {
-		pllidarlite::stop();
+		ll40ls::stop();
 	}
 
 	/*
 	 * Test the driver/device.
 	 */
 	if (!strcmp(argv[1], "test")) {
-		pllidarlite::test();
+		ll40ls::test();
 	}
 
 	/*
 	 * Reset the driver.
 	 */
 	if (!strcmp(argv[1], "reset")) {
-		pllidarlite::reset();
+		ll40ls::reset();
 	}
 
 	/*
 	 * Print driver information.
 	 */
 	if (!strcmp(argv[1], "info") || !strcmp(argv[1], "status")) {
-		pllidarlite::info();
+		ll40ls::info();
 	}
 
 	errx(1, "unrecognized command, try 'start', 'test', 'reset' or 'info'");
