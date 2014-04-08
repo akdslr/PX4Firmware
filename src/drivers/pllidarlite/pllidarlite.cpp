@@ -511,9 +511,7 @@ PLLIDARLITE::collect()
 		    return retLow;
 	    }
     }
-
-	warnx("measurement: high %x low %x", val[0], val[1]);
-    
+   
 	uint16_t distance = val[0] << 8 | val[1];
 	float si_units = (distance * 1.0f) / 100.0f; /* cm to m */
 	struct range_finder_report report;
