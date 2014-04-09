@@ -74,6 +74,7 @@
 /* Configuration Constants */
 #define LL40LS_BUS 			   PX4_I2C_BUS_EXPANSION
 #define LL40LS_BASEADDR 	   0x42 // 7-bit address
+#define LL40LS_DEVICE_PATH     "/dev/ll40ls"
 
 /* LL40LS Registers addresses */
 #define LL40LS_MEASURE_REG	   0x00 // Measure Range Register
@@ -124,7 +125,7 @@ private:
 	bool				_sensor_ok;
 	int					_measure_ticks;
 	bool				_collect_phase;
-
+    int			_class_instance;
 	orb_advert_t		_range_finder_topic;
 
 	perf_counter_t		_sample_perf;
@@ -187,7 +188,7 @@ private:
 extern "C" __EXPORT int ll40ls_main(int argc, char *argv[]);
 
 LL40LS::LL40LS(int bus, int address) :
-	I2C("LL40LS", RANGE_FINDER_DEVICE_PATH, bus, address, 100000),
+	I2C("LL40LS", LL40LS_DEVICE_PATH, bus, address, 100000),
 	_min_distance(LL40LS_MIN_DISTANCE),
 	_max_distance(LL40LS_MAX_DISTANCE),
 	_reports(nullptr),
@@ -195,6 +196,7 @@ LL40LS::LL40LS(int bus, int address) :
 	_measure_ticks(0),
 	_collect_phase(false),
 	_range_finder_topic(-1),
+   	_class_instance(-1),
 	_sample_perf(perf_alloc(PC_ELAPSED, "ll40ls_read")),
 	_comms_errors(perf_alloc(PC_COUNT, "ll40ls_comms_errors")),
 	_buffer_overflows(perf_alloc(PC_COUNT, "ll40ls_buffer_overflows"))
@@ -218,6 +220,15 @@ LL40LS::~LL40LS()
 	if (_reports != nullptr) {
 		delete _reports;
 	}
+    
+    if (_class_instance != -1) {
+        unregister_class_devname(RANGE_FINDER_DEVICE_PATH, _class_instance);
+    }
+    
+  	// free perf counters
+	perf_free(_sample_perf);
+	perf_free(_comms_errors);
+	perf_free(_buffer_overflows);
 }
 
 int
@@ -237,13 +248,17 @@ LL40LS::init()
 		goto out;
 	}
 
-	/* get a publish handle on the range finder topic */
-	struct range_finder_report zero_report;
-	memset(&zero_report, 0, sizeof(zero_report));
-	_range_finder_topic = orb_advertise(ORB_ID(sensor_range_finder), &zero_report);
+    _class_instance = register_class_devname(RANGE_FINDER_DEVICE_PATH);
 
-	if (_range_finder_topic < 0) {
-		debug("failed to create sensor_range_finder object. Did you start uOrb?");
+	if (_class_instance == CLASS_DEVICE_PRIMARY) {
+        /* get a publish handle on the range finder topic */
+        struct range_finder_report zero_report;
+        memset(&zero_report, 0, sizeof(zero_report));
+        _range_finder_topic = orb_advertise(ORB_ID(sensor_range_finder), &zero_report);
+
+        if (_range_finder_topic < 0) {
+            debug("failed to create sensor_range_finder object. Did you start uOrb?");
+        }
 	}
 
 	ret = OK;
@@ -524,8 +539,10 @@ LL40LS::collect()
 	report.valid = si_units > get_minimum_distance() && si_units < get_maximum_distance() ? 1 : 0;
 
 	/* publish it */
-	orb_publish(ORB_ID(sensor_range_finder), _range_finder_topic, &report);
-
+    if (_range_finder_topic > 0 && !(_pub_blocked)) {
+	    orb_publish(ORB_ID(sensor_range_finder), _range_finder_topic, &report);
+    }
+    
 	if (_reports->force(&report)) {
 		perf_count(_buffer_overflows);
 	}
@@ -683,7 +700,7 @@ start()
 	}
 
 	/* set the poll rate to default, starts automatic data collection */
-	fd = open(RANGE_FINDER_DEVICE_PATH, O_RDONLY);
+	fd = open(LL40LS_DEVICE_PATH, O_RDONLY);
 
 	if (fd < 0) {
 		goto fail;
@@ -733,10 +750,10 @@ test()
 	ssize_t sz;
 	int ret;
 
-	int fd = open(RANGE_FINDER_DEVICE_PATH, O_RDONLY);
+	int fd = open(LL40LS_DEVICE_PATH, O_RDONLY);
 
 	if (fd < 0) {
-		err(1, "%s open failed (try 'll40ls start' if the driver is not running", RANGE_FINDER_DEVICE_PATH);
+		err(1, "%s open failed (try 'll40ls start' if the driver is not running", LL40LS_DEVICE_PATH);
 	}
 
 	/* do a simple demand read */
@@ -794,7 +811,7 @@ test()
 void
 reset()
 {
-	int fd = open(RANGE_FINDER_DEVICE_PATH, O_RDONLY);
+	int fd = open(LL40LS_DEVICE_PATH, O_RDONLY);
 
 	if (fd < 0) {
 		err(1, "failed ");
