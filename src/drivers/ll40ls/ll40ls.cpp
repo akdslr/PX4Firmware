@@ -1,20 +1,20 @@
 /****************************************************************************
  *
- *   Copyright (c) 2013 PX4 Development Team. All rights reserved.
+ *	 Copyright (c) 2013 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
  *
  * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
+ *	  notice, this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
+ *	  notice, this list of conditions and the following disclaimer in
+ *	  the documentation and/or other materials provided with the
+ *	  distribution.
  * 3. Neither the name PX4 nor the names of its contributors may be
- *    used to endorse or promote products derived from this software
- *    without specific prior written permission.
+ *	  used to endorse or promote products derived from this software
+ *	  without specific prior written permission.
  *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
@@ -72,15 +72,15 @@
 #include <board_config.h>
 
 /* Configuration Constants */
-#define LL40LS_BUS 			   PX4_I2C_BUS_EXPANSION
-#define LL40LS_BASEADDR 	   0x42 // 7-bit address
-#define LL40LS_DEVICE_PATH     "/dev/ll40ls"
+#define LL40LS_BUS			   PX4_I2C_BUS_EXPANSION
+#define LL40LS_BASEADDR		   0x42 // 7-bit address
+#define LL40LS_DEVICE_PATH	   "/dev/ll40ls"
 
 /* LL40LS Registers addresses */
 #define LL40LS_MEASURE_REG	   0x00 // Measure Range Register
 #define LL40LS_MSRREG_ACQUIRE  0x61
-#define LL40LS_DISTHIGH_REG    0x0f // high byte of distance measurement
-#define LL40LS_DISTLOW_REG     0x10 // low byte of distance measurement
+#define LL40LS_DISTHIGH_REG	   0x0f // high byte of distance measurement
+#define LL40LS_DISTLOW_REG	   0x10 // low byte of distance measurement
 
 /* Device limits */
 #define LL40LS_MIN_DISTANCE (0.00f)
@@ -104,7 +104,7 @@ public:
 	LL40LS(int bus = LL40LS_BUS, int address = LL40LS_BASEADDR);
 	virtual ~LL40LS();
 
-	virtual int 		init();
+	virtual int			init();
 
 	virtual ssize_t		read(struct file *filp, char *buffer, size_t buflen);
 	virtual int			ioctl(struct file *filp, int cmd, unsigned long arg);
@@ -125,7 +125,7 @@ private:
 	bool				_sensor_ok;
 	int					_measure_ticks;
 	bool				_collect_phase;
-    int			_class_instance;
+	int			_class_instance;
 	orb_advert_t		_range_finder_topic;
 
 	perf_counter_t		_sample_perf;
@@ -144,8 +144,8 @@ private:
 	/**
 	* Initialise the automatic measurement state machine and start it.
 	*
-	* @note This function is called at open and error time.  It might make sense
-	*       to make it more aggressive about resetting the bus in case of errors.
+	* @note This function is called at open and error time.	 It might make sense
+	*		to make it more aggressive about resetting the bus in case of errors.
 	*/
 	void				start();
 
@@ -196,13 +196,13 @@ LL40LS::LL40LS(int bus, int address) :
 	_measure_ticks(0),
 	_collect_phase(false),
 	_range_finder_topic(-1),
-   	_class_instance(-1),
+	_class_instance(-1),
 	_sample_perf(perf_alloc(PC_ELAPSED, "ll40ls_read")),
 	_comms_errors(perf_alloc(PC_COUNT, "ll40ls_comms_errors")),
 	_buffer_overflows(perf_alloc(PC_COUNT, "ll40ls_buffer_overflows"))
 {
-    // up the retries since the device misses the first measure attempts
-    I2C::_retries = 3;
+	// up the retries since the device misses the first measure attempts
+	I2C::_retries = 3;
 
 	// enable debug() calls
 	_debug_enabled = false;
@@ -220,12 +220,12 @@ LL40LS::~LL40LS()
 	if (_reports != nullptr) {
 		delete _reports;
 	}
-    
-    if (_class_instance != -1) {
-        unregister_class_devname(RANGE_FINDER_DEVICE_PATH, _class_instance);
-    }
-    
-  	// free perf counters
+	
+	if (_class_instance != -1) {
+		unregister_class_devname(RANGE_FINDER_DEVICE_PATH, _class_instance);
+	}
+	
+	// free perf counters
 	perf_free(_sample_perf);
 	perf_free(_comms_errors);
 	perf_free(_buffer_overflows);
@@ -248,17 +248,18 @@ LL40LS::init()
 		goto out;
 	}
 
-    _class_instance = register_class_devname(RANGE_FINDER_DEVICE_PATH);
+	_class_instance = register_class_devname(RANGE_FINDER_DEVICE_PATH);
 
 	if (_class_instance == CLASS_DEVICE_PRIMARY) {
-        /* get a publish handle on the range finder topic */
-        struct range_finder_report zero_report;
-        memset(&zero_report, 0, sizeof(zero_report));
-        _range_finder_topic = orb_advertise(ORB_ID(sensor_range_finder), &zero_report);
+		/* get a publish handle on the range finder topic */
+		struct range_finder_report rf_report;
+		measure();
+		_reports->get(&rf_report);
+		_range_finder_topic = orb_advertise(ORB_ID(sensor_range_finder), &rf_report);
 
-        if (_range_finder_topic < 0) {
-            debug("failed to create sensor_range_finder object. Did you start uOrb?");
-        }
+		if (_range_finder_topic < 0) {
+			debug("failed to create sensor_range_finder object. Did you start uOrb?");
+		}		 
 	}
 
 	ret = OK;
@@ -480,7 +481,7 @@ LL40LS::measure()
 	/*
 	 * Send the command to begin a measurement.
 	 */
-   	const uint8_t cmd[2] = { LL40LS_MEASURE_REG, LL40LS_MSRREG_ACQUIRE };
+	const uint8_t cmd[2] = { LL40LS_MEASURE_REG, LL40LS_MSRREG_ACQUIRE };
 	ret = transfer(cmd, sizeof(cmd), nullptr, 0);
 
 	if (OK != ret) {
@@ -498,35 +499,35 @@ int
 LL40LS::collect()
 {
 	int	ret = -EIO;
-    int	retLow = -EIO;
+	int	retLow = -EIO;
 
 	/* read from the sensor */
 	uint8_t val[2] = {0, 0};
 
 	perf_begin(_sample_perf);
 
-    // Read the high byte distance register
-    uint8_t regHigh = LL40LS_DISTHIGH_REG;
+	// Read the high byte distance register
+	uint8_t regHigh = LL40LS_DISTHIGH_REG;
 	ret = transfer(&regHigh, 1, &val[0], 1);
-    
+	
 	if (ret < 0) {
 		log("error reading high byte from sensor: %d", ret);
 		perf_count(_comms_errors);
 		perf_end(_sample_perf);
 		return ret;
 	}
-    else {
-        // Read the low byte distance register
-        uint8_t regLow = LL40LS_DISTLOW_REG;
-	    retLow = transfer(&regLow, 1, &val[1], 1);
+	else {
+		// Read the low byte distance register
+		uint8_t regLow = LL40LS_DISTLOW_REG;
+		retLow = transfer(&regLow, 1, &val[1], 1);
 
-   	    if (retLow < 0) {
-		    log("error reading low byte from sensor: %d", retLow);
-		    perf_count(_comms_errors);
-		    perf_end(_sample_perf);
-		    return retLow;
-	    }
-    }
+		if (retLow < 0) {
+			log("error reading low byte from sensor: %d", retLow);
+			perf_count(_comms_errors);
+			perf_end(_sample_perf);
+			return retLow;
+		}
+	}
    
 	uint16_t distance = val[0] << 8 | val[1];
 	float si_units = (distance * 1.0f) / 100.0f; /* cm to m */
@@ -539,10 +540,10 @@ LL40LS::collect()
 	report.valid = si_units > get_minimum_distance() && si_units < get_maximum_distance() ? 1 : 0;
 
 	/* publish it */
-    if (_range_finder_topic > 0 && !(_pub_blocked)) {
-	    orb_publish(ORB_ID(sensor_range_finder), _range_finder_topic, &report);
-    }
-    
+	if (_range_finder_topic > 0 && !(_pub_blocked)) {
+		orb_publish(ORB_ID(sensor_range_finder), _range_finder_topic, &report);
+	}
+	
 	if (_reports->force(&report)) {
 		perf_count(_buffer_overflows);
 	}
@@ -652,7 +653,7 @@ LL40LS::print_info()
 	perf_print_counter(_sample_perf);
 	perf_print_counter(_comms_errors);
 	perf_print_counter(_buffer_overflows);
-	printf("poll interval:  %u ticks\n", _measure_ticks);
+	printf("poll interval:	%u ticks\n", _measure_ticks);
 	_reports->print_info("report queue");
 }
 
@@ -765,7 +766,7 @@ test()
 
 	warnx("single read");
 	warnx("measurement: %0.2f m", (double)report.distance);
-	warnx("time:        %lld", report.timestamp);
+	warnx("time:		%lld", report.timestamp);
 
 	/* start the sensor polling at 2Hz */
 	if (OK != ioctl(fd, SENSORIOCSPOLLRATE, 2)) {
@@ -794,7 +795,7 @@ test()
 
 		warnx("periodic read %u", i);
 		warnx("measurement: %0.3f", (double)report.distance);
-		warnx("time:        %lld", report.timestamp);
+		warnx("time:		%lld", report.timestamp);
 	}
 
 	/* reset the sensor polling to default rate */
