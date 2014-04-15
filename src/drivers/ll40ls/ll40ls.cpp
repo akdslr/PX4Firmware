@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *	 Copyright (c) 2013 PX4 Development Team. All rights reserved.
+ *	Copyright (c) 2013 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -72,21 +72,20 @@
 #include <board_config.h>
 
 /* Configuration Constants */
-#define LL40LS_BUS			   PX4_I2C_BUS_EXPANSION
-#define LL40LS_BASEADDR		   0x42 // 7-bit address
-#define LL40LS_DEVICE_PATH	   "/dev/ll40ls"
+#define LL40LS_BUS					PX4_I2C_BUS_EXPANSION
+#define LL40LS_BASEADDR				0x42 // 7-bit address
+#define LL40LS_DEVICE_PATH			"/dev/ll40ls"
 
 /* LL40LS Registers addresses */
-#define LL40LS_MEASURE_REG	   0x00 // Measure Range Register
-#define LL40LS_MSRREG_ACQUIRE  0x61
-#define LL40LS_DISTHIGH_REG	   0x0f // high byte of distance measurement
-#define LL40LS_DISTLOW_REG	   0x10 // low byte of distance measurement
+#define LL40LS_MEASURE_REG			0x00 // Measure range register
+#define LL40LS_MSRREG_ACQUIRE		0x61 // Value to initiate a measurement
+#define LL40LS_DISTHIGH_REG			0x8f // High byte of measurement, auto increment
 
 /* Device limits */
-#define LL40LS_MIN_DISTANCE (0.00f)
-#define LL40LS_MAX_DISTANCE (14.00f)
+#define LL40LS_MIN_DISTANCE			(0.00f)
+#define LL40LS_MAX_DISTANCE			(14.00f)
 
-#define LL40LS_CONVERSION_INTERVAL 60000 /* 60ms */
+#define LL40LS_CONVERSION_INTERVAL	60000 /* 60ms */
 
 /* oddly, ERROR is not defined for c++ */
 #ifdef ERROR
@@ -121,11 +120,11 @@ private:
 	float				_min_distance;
 	float				_max_distance;
 	work_s				_work;
-	RingBuffer		*_reports;
+	RingBuffer			*_reports;
 	bool				_sensor_ok;
 	int					_measure_ticks;
 	bool				_collect_phase;
-	int			_class_instance;
+	int					_class_instance;
 	orb_advert_t		_range_finder_topic;
 
 	perf_counter_t		_sample_perf;
@@ -499,7 +498,6 @@ int
 LL40LS::collect()
 {
 	int	ret = -EIO;
-	int	retLow = -EIO;
 
 	/* read from the sensor */
 	uint8_t val[2] = {0, 0};
@@ -508,25 +506,13 @@ LL40LS::collect()
 
 	// Read the high byte distance register
 	uint8_t regHigh = LL40LS_DISTHIGH_REG;
-	ret = transfer(&regHigh, 1, &val[0], 1);
+	ret = transfer(&regHigh, 1, &val[0], sizeof(val));
 	
 	if (ret < 0) {
 		log("error reading high byte from sensor: %d", ret);
 		perf_count(_comms_errors);
 		perf_end(_sample_perf);
 		return ret;
-	}
-	else {
-		// Read the low byte distance register
-		uint8_t regLow = LL40LS_DISTLOW_REG;
-		retLow = transfer(&regLow, 1, &val[1], 1);
-
-		if (retLow < 0) {
-			log("error reading low byte from sensor: %d", retLow);
-			perf_count(_comms_errors);
-			perf_end(_sample_perf);
-			return retLow;
-		}
 	}
    
 	uint16_t distance = val[0] << 8 | val[1];
@@ -537,8 +523,13 @@ LL40LS::collect()
 	report.timestamp = hrt_absolute_time();
 	report.error_count = perf_event_count(_comms_errors);
 	report.distance = si_units;
-	report.valid = si_units > get_minimum_distance() && si_units < get_maximum_distance() ? 1 : 0;
-
+	if (si_units > get_minimum_distance() && si_units < get_maximum_distance()) {
+		report.valid = 1;
+	}
+	else {
+		report.valid = 0;
+	}
+	
 	/* publish it */
 	if (_range_finder_topic > 0 && !(_pub_blocked)) {
 		orb_publish(ORB_ID(sensor_range_finder), _range_finder_topic, &report);
